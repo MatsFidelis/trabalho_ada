@@ -27,6 +27,8 @@ Para simular uma release sem serviços externos:
 bash scripts/mock_release_artifacts.sh
 python3 scripts/check_license_policy.py --sbom artifacts/sbom.cdx.json --output artifacts/license-policy.json
 python3 scripts/consulta_dt.py --sbom artifacts/sbom.cdx.json --project trabalho-ada --version local --output artifacts/dependency-track-log.json --mock
+python3 scripts/generate_evidence_manifest.py --directory artifacts
+python3 scripts/verify_evidence.py --directory artifacts
 python3 scripts/gera_dashboard.py --csv "relatorios/$(date +%Y-%m)/conformidade.csv" --dt-log artifacts/dependency-track-log.json --trivy-log artifacts/trivy.json --output verification/dashboard.html
 ```
 

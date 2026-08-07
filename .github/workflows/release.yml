@@ -103,6 +103,8 @@ jobs:
           image_digest=${{ steps.build.outputs.digest || 'mock' }}
           release_ref=${{ github.ref }}
           EOF
+      - name: Generate evidence integrity manifest
+        run: python3 scripts/generate_evidence_manifest.py --directory artifacts
       - name: Verify evidence bundle
         run: python3 scripts/verify_evidence.py --directory artifacts
       - uses: actions/upload-artifact@v4
@@ -135,3 +137,4 @@ jobs:
             artifacts/license-policy.json
             artifacts/dependency-track-log.json
             artifacts/release-summary.txt
+            artifacts/evidence-manifest.json
