@@ -1,0 +1,11 @@
+{
+  "name": "trabalho-ada",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Projeto final integrador de compliance contínuo",
+  "scripts": {
+    "test:policies": "opa test policies -v",
+    "build:image": "docker build -t trabalho-ada:local .",
+    "report:mock": "MOCK_MODE=1 bash scripts/gera_relatorio.sh"
+  }
+}

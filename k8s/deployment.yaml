@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trabalho-ada
+  namespace: producao
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trabalho-ada
+  template:
+    metadata:
+      labels:
+        app: trabalho-ada
+    spec:
+      containers:
+        - name: trabalho-ada
+          image: ghcr.io/${GITHUB_REPOSITORY}@sha256:replace-at-release
+          imagePullPolicy: IfNotPresent

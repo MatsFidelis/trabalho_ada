@@ -1,0 +1,47 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required structure
+        run: |
+          for file in Dockerfile README.md package.json k8s/deployment.yaml k8s/policy-controller-policy.yaml dashboards/grafana-dashboard.json scripts/mock_release_artifacts.sh scripts/check_license_policy.py scripts/consulta_dt.py scripts/gera_relatorio.sh scripts/gera_dashboard.py; do test -f "$file"; done
+          test "$(find policies/rego -name '*.rego' | wc -l)" -ge 5
+      - name: Validate YAML and JSON
+        run: |
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml", "k8s/*.yaml"].each { |f| YAML.load_stream(File.read(f)); puts "ok #{f}" }'
+          python3 -m json.tool package.json > /dev/null
+          python3 -m json.tool dashboards/grafana-dashboard.json > /dev/null
+  policies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: open-policy-agent/setup-opa@v2
+      - run: opa test policies -v
+  evidence-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build artifact image
+        run: docker build -t trabalho-ada:verify .
+      - name: Generate and validate mock evidence
+        run: |
+          bash scripts/mock_release_artifacts.sh
+          python3 scripts/check_license_policy.py --sbom artifacts/sbom.cdx.json --output artifacts/license-policy.json
+          python3 scripts/consulta_dt.py --sbom artifacts/sbom.cdx.json --project trabalho-ada --version verify --output artifacts/dependency-track-log.json --mock
+          MOCK_MODE=1 bash scripts/gera_relatorio.sh
+          python3 scripts/gera_dashboard.py --csv "relatorios/$(date +%Y-%m)/conformidade.csv" --dt-log artifacts/dependency-track-log.json --trivy-log artifacts/trivy.json --output verification/dashboard.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verify-evidence
+          path: artifacts/

@@ -1,0 +1,72 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      pipeline_mode:
+        description: "live publica no GHCR; mock apenas gera evidências"
+        required: true
+        default: mock
+        type: choice
+        options: [mock, live]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+      MODE: ${{ github.event_name == 'push' && 'live' || inputs.pipeline_mode }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: open-policy-agent/setup-opa@v2
+      - run: opa test policies -v
+      - name: Build local image
+        run: docker build -t trabalho-ada:${{ github.sha }} .
+      - name: Login and publish image
+        if: env.MODE == 'live'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        if: env.MODE == 'live'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ${{ env.IMAGE }}
+      - name: Generate SBOMs and vulnerability scan
+        if: env.MODE == 'live'
+        run: |
+          mkdir -p artifacts
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts:/output" anchore/syft:latest "${IMAGE}" -o cyclonedx-json=/output/sbom.cdx.json -o spdx-json=/output/sbom.spdx.json
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts:/output" aquasec/trivy:latest image --format json --output /output/trivy.json "${IMAGE}"
+      - name: Generate mock evidence
+        if: env.MODE != 'live'
+        env:
+          IMAGE_REF: ${{ env.IMAGE }}
+        run: bash scripts/mock_release_artifacts.sh
+      - name: Enforce license policy and submit SBOM
+        run: |
+          python3 scripts/check_license_policy.py --sbom artifacts/sbom.cdx.json --output artifacts/license-policy.json
+          python3 scripts/consulta_dt.py --sbom artifacts/sbom.cdx.json --project trabalho-ada --version "${{ github.ref_name }}" --output artifacts/dependency-track-log.json ${{ env.MODE != 'live' && '--mock' || '' }}
+      - uses: sigstore/cosign-installer@v3
+        if: env.MODE == 'live'
+      - name: Sign and attest image
+        if: env.MODE == 'live'
+        run: |
+          cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
+          cosign attest --yes --predicate artifacts/sbom.cdx.json --type cyclonedx "${IMAGE}@${{ steps.build.outputs.digest }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: artifacts/

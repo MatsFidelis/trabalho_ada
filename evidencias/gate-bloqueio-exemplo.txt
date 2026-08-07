@@ -1,0 +1,4 @@
+kubectl run intruso --image=ghcr.io/exemplo/trabalho-ada:fake -n producao
+
+Error from server (BadRequest): admission webhook "policy.sigstore.dev" denied the request:
+no matching signatures

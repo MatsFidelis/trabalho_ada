@@ -1,0 +1,13 @@
+{
+  "title": "trabalho-ada compliance",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {"type": "stat", "title": "Releases avaliadas", "targets": [{"expr": "compliance_releases_total"}]},
+    {"type": "stat", "title": "Assinaturas validas", "targets": [{"expr": "compliance_signed_total"}]},
+    {"type": "stat", "title": "Provenance valida", "targets": [{"expr": "compliance_provenance_total"}]},
+    {"type": "stat", "title": "Submissoes no Dependency-Track", "targets": [{"expr": "compliance_dt_submissions_total"}]},
+    {"type": "stat", "title": "Vulnerabilidades criticas/altas", "targets": [{"expr": "compliance_critical_high_findings_total"}]}
+  ]
+}
