@@ -19,5 +19,16 @@ EOF
 cat > "${OUTPUT_DIR}/provenance.json" <<EOF
 {"_type":"https://in-toto.io/Statement/v1","subject":[{"name":"${IMAGE_REF}","digest":{"sha256":"${IMAGE_DIGEST#sha256:}"}}],"predicateType":"https://slsa.dev/provenance/v1","predicate":{"builder":{"id":"https://github.com/actions/attest-build-provenance"},"buildType":"https://github.com/Attestations/GitHubActionsWorkflow@v1"}}
 EOF
+cat > "${OUTPUT_DIR}/provenance-predicate.json" <<EOF
+{"buildDefinition":{"buildType":"https://github.com/Attestations/GitHubActionsWorkflow@v1","externalParameters":{"workflow":".github/workflows/release.yml"}},"runDetails":{"builder":{"id":"https://github.com/actions/attest-build-provenance"}}}
+EOF
 printf 'mode=mock\nresult=success\n' > "${OUTPUT_DIR}/cosign-verify.txt"
 printf 'mode=mock\npredicateType=https://slsa.dev/provenance/v1\n' > "${OUTPUT_DIR}/cosign-verify-attestation.txt"
+printf 'Validation completed successfully (mock)\n' > "${OUTPUT_DIR}/cyclonedx-validate.txt"
+printf 'CycloneDX analysis completed successfully (mock)\n' > "${OUTPUT_DIR}/cyclonedx-analyze.txt"
+cat > "${OUTPUT_DIR}/release-summary.txt" <<EOF
+pipeline_mode=mock
+image_ref=${IMAGE_REF}
+image_digest=${IMAGE_DIGEST}
+release_ref=${TAG}
+EOF

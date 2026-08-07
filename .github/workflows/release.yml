@@ -50,6 +50,11 @@ jobs:
           mkdir -p artifacts
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts:/output" anchore/syft:latest "${IMAGE}" -o cyclonedx-json=/output/sbom.cdx.json -o spdx-json=/output/sbom.spdx.json
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts:/output" aquasec/trivy:latest image --format json --output /output/trivy.json "${IMAGE}"
+      - name: Validate and analyze CycloneDX SBOM
+        if: env.MODE == 'live'
+        run: |
+          docker run --rm -v "$PWD/artifacts:/work" cyclonedx/cyclonedx-cli:0.32.0 validate --input-file /work/sbom.cdx.json --input-format json --fail-on-errors > artifacts/cyclonedx-validate.txt
+          docker run --rm -v "$PWD/artifacts:/work" cyclonedx/cyclonedx-cli:0.32.0 analyze --input-file /work/sbom.cdx.json --input-format json --output-format text > artifacts/cyclonedx-analyze.txt
       - name: Generate mock evidence
         if: env.MODE != 'live'
         env:
@@ -66,7 +71,67 @@ jobs:
         run: |
           cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
           cosign attest --yes --predicate artifacts/sbom.cdx.json --type cyclonedx "${IMAGE}@${{ steps.build.outputs.digest }}"
+          cosign attest --yes --predicate artifacts/trivy.json --type vuln "${IMAGE}@${{ steps.build.outputs.digest }}"
+      - name: Generate and attest SLSA provenance
+        if: env.MODE == 'live'
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          cat > artifacts/provenance-predicate.json <<EOF
+          {"buildDefinition":{"buildType":"https://github.com/Attestations/GitHubActionsWorkflow@v1","externalParameters":{"repository":"${{ github.repository }}","ref":"${{ github.ref }}","workflow":".github/workflows/release.yml"}},"runDetails":{"builder":{"id":"https://github.com/actions/attest-build-provenance"}}}
+          EOF
+          cat > artifacts/provenance.json <<EOF
+          {"_type":"https://in-toto.io/Statement/v1","subject":[{"name":"${IMAGE}","digest":{"sha256":"${DIGEST#sha256:}"}}],"predicateType":"https://slsa.dev/provenance/v1","predicate":$(cat artifacts/provenance-predicate.json)}
+          EOF
+          cosign attest --yes --predicate artifacts/provenance-predicate.json --type slsaprovenance1 "${IMAGE}@${{ steps.build.outputs.digest }}"
+      - name: Generate GitHub build provenance
+        if: env.MODE == 'live'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Verify signature and provenance
+        if: env.MODE == 'live'
+        run: |
+          cosign verify "${IMAGE}@${{ steps.build.outputs.digest }}" --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com > artifacts/cosign-verify.txt
+          cosign verify-attestation "${IMAGE}@${{ steps.build.outputs.digest }}" --type slsaprovenance1 --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com > artifacts/cosign-verify-attestation.txt
+      - name: Persist release summary
+        run: |
+          cat > artifacts/release-summary.txt <<EOF
+          pipeline_mode=${MODE}
+          image_ref=${IMAGE}
+          image_digest=${{ steps.build.outputs.digest || 'mock' }}
+          release_ref=${{ github.ref }}
+          EOF
+      - name: Verify evidence bundle
+        run: python3 scripts/verify_evidence.py --directory artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: release-evidence
           path: artifacts/
+
+  publish-release:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-evidence
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/sbom.cdx.json
+            artifacts/sbom.spdx.json
+            artifacts/trivy.json
+            artifacts/provenance.json
+            artifacts/provenance-predicate.json
+            artifacts/cosign-verify.txt
+            artifacts/cosign-verify-attestation.txt
+            artifacts/cyclonedx-validate.txt
+            artifacts/cyclonedx-analyze.txt
+            artifacts/license-policy.json
+            artifacts/dependency-track-log.json
+            artifacts/release-summary.txt

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate required structure
         run: |
-          for file in Dockerfile README.md package.json k8s/deployment.yaml k8s/policy-controller-policy.yaml dashboards/grafana-dashboard.json scripts/mock_release_artifacts.sh scripts/check_license_policy.py scripts/consulta_dt.py scripts/gera_relatorio.sh scripts/gera_dashboard.py; do test -f "$file"; done
+          for file in Dockerfile README.md package.json k8s/deployment.yaml k8s/policy-controller-policy.yaml dashboards/grafana-dashboard.json evidencias/README.md evidencias/gate-bloqueio-exemplo.txt scripts/mock_release_artifacts.sh scripts/check_license_policy.py scripts/consulta_dt.py scripts/gera_relatorio.sh scripts/gera_dashboard.py scripts/verify_evidence.py; do test -f "$file"; done
           test "$(find policies/rego -name '*.rego' | wc -l)" -ge 5
       - name: Validate YAML and JSON
         run: |
@@ -39,6 +39,7 @@ jobs:
           bash scripts/mock_release_artifacts.sh
           python3 scripts/check_license_policy.py --sbom artifacts/sbom.cdx.json --output artifacts/license-policy.json
           python3 scripts/consulta_dt.py --sbom artifacts/sbom.cdx.json --project trabalho-ada --version verify --output artifacts/dependency-track-log.json --mock
+          python3 scripts/verify_evidence.py --directory artifacts
           MOCK_MODE=1 bash scripts/gera_relatorio.sh
           python3 scripts/gera_dashboard.py --csv "relatorios/$(date +%Y-%m)/conformidade.csv" --dt-log artifacts/dependency-track-log.json --trivy-log artifacts/trivy.json --output verification/dashboard.html
       - uses: actions/upload-artifact@v4

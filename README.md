@@ -32,6 +32,8 @@ python3 scripts/gera_dashboard.py --csv "relatorios/$(date +%Y-%m)/conformidade.
 
 `verify.yml` valida o projeto em PRs e pushes na `main`. `release.yml` roda em tags `v*`; no modo `live` publica em GHCR, gera SBOM, scan Trivy, assinatura Cosign e atestações. O disparo manual também permite modo `mock`.
 
+As evidências de cada execução são verificadas por `scripts/verify_evidence.py`, anexadas ao workflow e, em tags, publicadas na release. A relação entre cada requisito e seu respectivo arquivo está em [`evidencias/README.md`](evidencias/README.md).
+
 ## Mapeamento de controles
 
 | Controle | Referências |
